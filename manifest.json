@@ -1,0 +1,10 @@
+{
+	"id": "web-bookmark",
+	"name": "Web Bookmark",
+	"version": "1.0.0",
+	"minAppVersion": "0.15.0",
+	"description": "Format web link from clipboard.",
+	"author": "Vahatra",
+	"authorUrl": "https://github.com/Vahatra",
+	"isDesktopOnly": true
+}
