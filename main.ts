@@ -1,4 +1,4 @@
-import { Editor, MarkdownView, Notice, Plugin, requestUrl } from 'obsidian';
+import { Editor, Notice, Plugin, requestUrl } from 'obsidian';
 
 // Remember to rename these classes and interfaces!
 
@@ -16,37 +16,54 @@ export default class WebBookmarkPlugin extends Plugin {
 	async onload() {
 		await this.loadSettings();
 
-		// This adds an editor command that can perform some operation on the current editor instance
+		// just title
 		this.addCommand({
-			id: 'web-bookmark',
-			name: 'Web Bookmark',
-			editorCallback: async (editor: Editor, view: MarkdownView) => {
-				console.log(editor.getSelection());
-
-				editor.replaceSelection('');
-
-				// try-catch with a notification in the catch so user knows if 
-				// it fails and doesn't sit around waiting 10sec thinking its 
-				// just taking a long time to load
+			id: 'web-bookmark-title',
+			name: 'Web Bookmark Title',
+			editorCallback: async (editor: Editor) => {
 				try {
-					// get the text from the clipboard
-					let clipboardURL = await navigator.clipboard.readText();
-
-					// CHECK URL IS VALID URL, IF NOT NOTIFY AND END FUNCTION
-					if (! /^https?:\/\/[^ "]+$/.test(clipboardURL)) {
+					let clipboardText = await navigator.clipboard.readText();
+					if (!this.isUrl(clipboardText)) {
 						new Notice('URL invalid');
 						return
 					}
-					const title = await getTitle(clipboardURL);
-					const formatted = '[' + title + ']' + '(' + clipboardURL + ')';
+					const output = await getTitle(clipboardText);
 
-					editor.replaceSelection(formatted);
+					editor.replaceSelection(output);
 				} catch (e) {
 					console.error(e);
 					new Notice('Failed to format link');
 				}
 			}
 		});
+
+		// iframe
+		this.addCommand({
+			id: 'web-bookmark-iframe',
+			name: 'Web Bookmark iFrame',
+			editorCallback: async (editor: Editor) => {
+				try {
+					let clipboardText = await navigator.clipboard.readText();
+					if (!this.isUrl(clipboardText)) {
+						new Notice('URL invalid');
+						return
+					}
+					const output = await getIframely(clipboardText);
+
+					editor.replaceSelection(output);
+				} catch (e) {
+					console.error(e);
+					new Notice('Failed to format link');
+				}
+			}
+		});
+	}
+
+	isUrl(text: string): boolean {
+		const urlRegex = new RegExp(
+			"^(http:\\/\\/www\\.|https:\\/\\/www\\.|http:\\/\\/|https:\\/\\/)?[a-z0-9]+([\\-.]{1}[a-z0-9]+)*\\.[a-z]{2,5}(:[0-9]{1,5})?(\\/.*)?$"
+		);
+		return urlRegex.test(text);
 	}
 
 	onunload() { }
@@ -58,8 +75,6 @@ export default class WebBookmarkPlugin extends Plugin {
 	async saveSettings() {
 		await this.saveData(this.settings);
 	}
-
-
 }
 
 async function getTitle(url: string) {
@@ -79,7 +94,8 @@ async function getTitle(url: string) {
 			title = title.trim();
 			// decode html entities
 			title = decodeHtmlEntities(title);
-			return title;
+
+			return '[' + title + ']' + '(' + url + ')';
 		})
 }
 
@@ -88,3 +104,30 @@ function decodeHtmlEntities(str: string) {
 	node.innerHTML = str;
 	return node.innerText;
 };
+
+
+async function getIframely(url: string) {
+	return await requestUrl({ url: `http://iframely.server.crestify.com/iframely?url=${url}` })
+		.then((t: any) => t.text)
+		.then((r: any) => {
+			const data = JSON.parse(r);
+			const imageLink = data.links[0].href || '';
+
+			return `<div>
+	<a class="rich-link-card" href="${url}" target="_blank">
+		<div class="rich-link-image-container">
+			<div class="rich-link-image" style="background-image: url('${imageLink}')"></div>
+		</div>
+		<div class="rich-link-card-text">
+			<h1 class="rich-link-card-title">${(data.meta.title || "").replace(/\s{3,}/g, ' ').trim()}</h1>
+			<p class="rich-link-card-description">
+				${(data.meta.description || "").replace(/\s{3,}/g, ' ').trim()}
+			</p>
+			<p class="rich-link-href">
+				${url}
+			</p>
+		</div>
+	</a>
+</div>\n`;
+		})
+}
